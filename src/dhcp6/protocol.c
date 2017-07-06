@@ -1343,30 +1343,40 @@ __ni_dhcp6_build_oro_opts(ni_dhcp6_device_t *dev,
 				ni_dhcp6_option_request_t *oro,
 				const ni_addrconf_lease_t *lease)
 {
-	/*
-	 * TODO: use config->update or something else
-	 */
 	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_PREFERENCE);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_DNS_SERVERS);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_DNS_DOMAINS);
-	/* TODO: linux nis currently does not support IPv6
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NIS_SERVERS);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NIS_DOMAIN_NAME);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NISP_SERVERS);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NISP_DOMAIN_NAME);
-	*/
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_POSIX_TZ_STRING);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_POSIX_TZ_DBNAME);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_BOOTFILE_URL);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_BOOTFILE_PARAM);
-	/*
-	 * TODO: ntp options envelope - AFAIR ISC dhcp does not support it yet.
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NTP_SERVER);
-	 */
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_SNTP_SERVERS);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_SIP_SERVER_D);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_SIP_SERVER_A);
-	ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_FQDN);
+	if (dev->config->update & NI_BIT(NI_ADDRCONF_UPDATE_DNS)) {
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_DNS_SERVERS);
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_DNS_DOMAINS);
+	}
+	if (dev->config->update & NI_BIT(NI_ADDRCONF_UPDATE_NTP)) {
+		/*
+		 * TODO: ntp options envelope - AFAIR ISC dhcp
+		 * and other servers do not support/know it yet.
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NTP_SERVER);
+		 */
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_SNTP_SERVERS);
+	}
+	if (dev->config->update & NI_BIT(NI_ADDRCONF_UPDATE_NIS)) {
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NIS_SERVERS);
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NIS_DOMAIN_NAME);
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NISP_SERVERS);
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_NISP_DOMAIN_NAME);
+	}
+	if (dev->config->update & NI_BIT(NI_ADDRCONF_UPDATE_SIP)) {
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_SIP_SERVER_D);
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_SIP_SERVER_A);
+	}
+	if (dev->config->update & NI_BIT(NI_ADDRCONF_UPDATE_TZ)) {
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_POSIX_TZ_STRING);
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_POSIX_TZ_DBNAME);
+	}
+	if (dev->config->update & NI_BIT(NI_ADDRCONF_UPDATE_BOOT)) {
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_BOOTFILE_URL);
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_BOOTFILE_PARAM);
+	}
+	if (dev->config->update & NI_BIT(NI_ADDRCONF_UPDATE_HOSTNAME)) {
+		ni_dhcp6_option_request_append(oro, NI_DHCP6_OPTION_FQDN);
+	}
 
 	if (dev->config) {
 		unsigned int i, code;
@@ -1412,7 +1422,7 @@ __ni_dhcp6_build_solicit_opts(ni_dhcp6_device_t *dev,
 
 	/* Init ia list if empty */
 	if (dev->config->ia_list == NULL) {
-		if (dev->iaid == 0 && ni_dhcp6_device_iaid(dev, &dev->iaid) < 0)
+		if (dev->iaid == 0 && !ni_dhcp6_device_iaid(dev, &dev->iaid))
 			goto cleanup;
 
 		ni_dhcp6_ia_t *ia = ni_dhcp6_ia_na_new(dev->iaid);
@@ -1926,19 +1936,61 @@ ni_dhcp6_ia_pd_new(unsigned int iaid)
 }
 
 ni_bool_t
-ni_dhcp6_ia_type_na(ni_dhcp6_ia_t *ia)
+ni_dhcp6_ia_type_na(const ni_dhcp6_ia_t *ia)
 {
 	return ia->type == NI_DHCP6_OPTION_IA_NA;
 }
 ni_bool_t
-ni_dhcp6_ia_type_ta(ni_dhcp6_ia_t *ia)
+ni_dhcp6_ia_type_ta(const ni_dhcp6_ia_t *ia)
 {
 	return ia->type == NI_DHCP6_OPTION_IA_TA;
 }
 ni_bool_t
-ni_dhcp6_ia_type_pd(ni_dhcp6_ia_t *ia)
+ni_dhcp6_ia_type_pd(const ni_dhcp6_ia_t *ia)
 {
 	return ia->type == NI_DHCP6_OPTION_IA_PD;
+}
+
+unsigned int
+ni_dhcp6_lease_ia_na_iaid(const ni_addrconf_lease_t *lease)
+{
+	const ni_dhcp6_ia_t *ia;
+
+	for (ia = lease ? lease->dhcp6.ia_list : NULL; ia; ia = ia->next) {
+		if (ni_dhcp6_ia_type_na(ia) && ia->iaid)
+			return ia->iaid;
+	}
+	return 0;
+}
+
+unsigned int
+ni_dhcp6_lease_ia_ta_iaid(const ni_addrconf_lease_t *lease)
+{
+	const ni_dhcp6_ia_t *ia;
+
+	for (ia = lease ? lease->dhcp6.ia_list : NULL; ia; ia = ia->next) {
+		if (ni_dhcp6_ia_type_ta(ia) && ia->iaid)
+			return ia->iaid;
+	}
+	return 0;
+}
+
+unsigned int
+ni_dhcp6_lease_ia_pd_iaid(const ni_addrconf_lease_t *lease)
+{
+	const ni_dhcp6_ia_t *ia;
+
+	for (ia = lease ? lease->dhcp6.ia_list : NULL; ia; ia = ia->next) {
+		if (ni_dhcp6_ia_type_pd(ia) && ia->iaid)
+			return ia->iaid;
+	}
+	return 0;
+}
+
+const ni_opaque_t *
+ni_dhcp6_lease_duid(const ni_addrconf_lease_t *lease)
+{
+	return lease ? &lease->dhcp6.client_id : NULL;
 }
 
 unsigned int
